@@ -97,7 +97,7 @@ makeSound(new Chicken()) //咯咯咯
 
 在 ECMAScript5 中提供了 `Object.create`方法，可以用来克隆对象：
 
-```
+```javascript
 var Plane = function(){ 
  this.blood = 100; 
  this.attackLevel = 1; 
@@ -145,7 +145,7 @@ Object.create = Object.create || function( obj ){
 
 ##### 1.作为对象的方法调用
 
-```
+```javascript
 var obj = { 
  a: 1, 
  getA: function(){ 
@@ -159,7 +159,7 @@ obj.getA();
 ##### 2.作为普通函数调用
 当函数不作为对象的属性被调用时，也就是我们常说的普通函数方式，此时的 `this` 总是指向全局对象。在浏览器的 JavaScript 里，这个全局对象是 `window`对象。
 
-```
+```javascript
 window.name = 'globalName'; 
 var getName = function(){ 
  return this.name; 
@@ -170,7 +170,7 @@ console.log( getName() ); // 输出：globalName
 ##### 3.构造器调用
   JavaScript 中没有类，但是可以从构造器中创建对象，同时也提供了 new 运算符，使得构造器看起来更像一个类。
    除了宿主提供的一些内置函数，大部分 JavaScript 函数都可以当作构造器使用。构造器的外表跟普通函数一模一样，它们的区别在于被调用的方式。当用 new 运算符调用函数时，该函数总会返回一个对象，通常情况下，构造器里的 this 就指向返回的这个对象，见如下代码：
- ```
+ ```javascript
 var MyClass = function(){ 
   this.name = 'sven'; 
 }; 
@@ -178,7 +178,7 @@ var obj = new MyClass();
 alert ( obj.name ); // 输出：sven
  ```
  但用 new 调用构造器时，还要注意一个问题，如果构造器显式地返回了一个 `object` 类型的对象，那么此次运算结果最终会返回这个对象，而不是我们之前期待的 this：
-```
+```javascript
 var MyClass = function(){ 
 this.name = 'sven'; 
 return { // 显式地返回一个对象
@@ -190,7 +190,7 @@ alert ( obj.name ); // 输出：anne
 ```
 ##### 4.Function.prototype.call 或 Function.prototype.apply 调用
 跟普通的函数调用相比，用 Function.prototype.call 或 Function.prototype.apply 可以动态地改变传入函数的 this：
-```
+```javascript
 var obj1 = { 
  name: 'sven', 
  getName: function(){ 
