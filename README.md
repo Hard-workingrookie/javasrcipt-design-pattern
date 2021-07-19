@@ -203,7 +203,10 @@ var obj2 = {
 console.log( obj1.getName() ); // 输出: sven 
 console.log( obj1.getName.call( obj2 ) ); // 输出：anne
 ```
-
+### call 和 apply
+#### apply
+`apply`接收两个参数，第一个参数指向函数体内this对象的指向，第二个参数为一个带下标的结合，可以为数组或者类数组。
+`call`参数不固定，第一个参数也是this指向，从第二个往后被依次传入函数。
 ## 3.闭包和高阶函数
 # 第二部分 设计模式
 ## 4.单例模式
