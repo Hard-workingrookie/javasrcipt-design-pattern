@@ -593,31 +593,194 @@ alert ( cost() ); // 求值并输出：600
 #### 2. uncurrying 反柯里化
 反柯里化的作用在与扩大函数的适用性，使本来作为特定对象所拥有的功能的函数可以被任意对象所用.
 #### 3.函数节流
+- 函数去抖（debounce）：让一个函数在一定间隔内没有被调用时，才开始执行被调用方法。
+- 函数节流（throttle）：是让一个函数无法在很短的时间间隔内连续调用，当上一次函数执行后过了规定的时间间隔，才能进行下一次该函数的调用。 函数节流的出发点，就是让一个函数不要执行得太频繁，减少一些过快的调用来节流。
+
+
+> 举个例子：
+> 想象每天上班大厦底下的电梯。把电梯完成一次运送，类比为一次函数的执行和响应。假设电梯有两种运行策略throttle和> > debounce，超时设定为15秒，不考虑容量限制。
+> debounce策略的电梯。如果电梯里有人进来，等待15秒。如果又人进来，15秒等待重新计时，直到15秒超时，开始运送。
+> throttle策略的电梯。保证如果电梯第一个人进来后，15秒后准时运送一次，不等待。如果没有人，则待机。
+
 #### 4.分时函数
+```js
+var timeChunk = function( ary, fn, count ){ 
+   var obj, t; 
+   var len = ary.length; 
+  
+   var start = function(){ 
+     for ( var i = 0; i < Math.min( count || 1, ary.length ); i++ ){ 
+       var obj = ary.shift(); 
+       fn( obj ); 
+     } 
+   }; 
+  
+   return function(){ 
+     t = setInterval(function(){ 
+     if ( ary.length === 0 ){ // 如果全部节点都已经被创建好
+       return clearInterval( t ); 
+     } 
+     start(); 
+     }, 200 ); // 分批执行的时间间隔，也可以用参数的形式传入
+   }; 
+};
+```
+最后我们进行一些小测试，假设我们有 1000 个好友的数据，我们利用 timeChunk 函数，每一 批只往页面中创建 8 个节点：
+```js
+ var ary = []; 
+ for ( var i = 1; i <= 1000; i++ ){ 
+  ary.push( i ); 
+ }; 
+
+ var renderFriendList = timeChunk( ary, function( n ){ 
+   var div = document.createElement( 'div' ); 
+   div.innerHTML = n; 
+   document.body.appendChild( div ); 
+ }, 8 ); 
+
+ renderFriendList();
+```
 # 第二部分 设计模式
 ## 4.单例模式
 保证一个类仅有一个实例，并提供一个访问它的全局访问点。
 有一些对象我们往往只需要一个，比如 线程池、全局缓存、浏览器中的window对象。
-实现单例模式
+### 实现单例模式
 用一个变量来标志是否已经为某个类创建，如果是，那就返回之前被创建的实例。
+```
+var Singleton = function( name ){ 
+   this.name = name; 
+   this.instance = null; 
+}; 
 
+Singleton.prototype.getName = function(){ 
+   alert ( this.name ); 
+}; 
+
+Singleton.getInstance = function( name ){ 
+   if ( !this.instance ){ 
+   this.instance = new Singleton( name ); 
+   } 
+   return this.instance; 
+}; 
+
+var a = Singleton.getInstance( 'sven1' ); 
+var b = Singleton.getInstance( 'sven2' ); 
+
+alert ( a === b ); // true
+```
 我们通过 Singleton.getInstance 来获取 Singleton 类的唯一对象，这种方式相对简单，但有一个问题，就是增加了这个类的“不透明性”，Singleton 类的使用者必须知道这是一个单例类， 跟以往通过 new XXX 的方式来获取对象不同，这里偏要使用Singleton.getInstance 来获取对象。
 所以以上这段 单例模式代码的意义不大，接下来编写更好的单例模式
-透明的单例模式
+### 透明的单例模式
 用户从这个类中创建对象的时候，可以像使用其他任何普通类一样。在下面的例子中，可以使用createDiv单例类，它的作用是负责在页面中创建唯一的 div 节点，代码如下：
+```js
+var CreateDiv = (function(){ 
+   var instance; 
+  
+   var CreateDiv = function( html ){ 
+       if ( instance ){ 
+       		return instance; 
+       } 
+       this.html = html; 
+       this.init();
+          return instance = this; 
+       }; 
+  
+     CreateDiv.prototype.init = function(){ 
+         var div = document.createElement( 'div' ); 
+         div.innerHTML = this.html; 
+         document.body.appendChild( div ); 
+		 }; 
+  
+   return CreateDiv; 
+})(); 
 
+var a = new CreateDiv( 'sven1' ); 
+var b = new CreateDiv( 'sven2' ); 
+
+alert ( a === b ); // true
+```
 虽然现在完成了一个透明的单例类的编写，但它同样有一些缺点。 为了把 instance 封装起来，我们使用了自执行的匿名函数和闭包，并且让这个匿名函数返回 真正的 Singleton 构造方法，这增加了一些程序的复杂度，阅读起来也不是很舒服。
  	观察现在的 Singleton 构造函数： 
-
+```js
+var CreateDiv = function( html ){ 
+   if ( instance ){ 
+  	 return instance; 
+   } 
+   this.html = html; 
+   this.init(); 
+   return instance = this; 
+}; 
+```
 在这段代码中，CreateDiv 的构造函数实际上负责了两件事情。第一是创建对象和执行初始化 init 方法，第二是保证只有一个对象。虽然我们目前还没有接触过“单一职责原则”的概念， 但可以明确的是，这是一种不好的做法，至少这个构造函数看起来很奇怪。
  假设我们某天需要利用这个类，在页面中创建千千万万的 div，即要让这个类从单例类变成一个普通的可产生多个实例的类，那我们必须得改写 CreateDiv 构造函数，把控制创建唯一对象的那一段去掉，这种修改会给我们带来不必要的烦恼。
-用代理实现单例模式
+### 用代理实现单例模式
+```js
+var CreateDiv = function( html ){ 
+   this.html = html;
+   this.init(); 
+}; 
 
+CreateDiv.prototype.init = function(){ 
+   var div = document.createElement( 'div' ); 
+   div.innerHTML = this.html; 
+   document.body.appendChild( div ); 
+}; 
+
+接下来引入代理类 proxySingletonCreateDiv：
+var ProxySingletonCreateDiv = (function(){ 
+   var instance; 
+   return function( html ){ 
+     if ( !instance ){ 
+   		  instance = new CreateDiv( html ); 
+     } 
+   return instance; 
+ } 
+})(); 
+
+var a = new ProxySingletonCreateDiv( 'sven1' ); 
+var b = new ProxySingletonCreateDiv( 'sven2' ); 
+alert ( a === b );
+```
 通过引入代理类的方式，我们同样完成了一个单例模式的编写，跟之前不同的是，现在我们把负责管理单例的逻辑移到了代理类 proxySingletonCreateDiv 中。这样一来，CreateDiv 就变成了一个普通的类，它跟 proxySingletonCreateDiv 组合起来可以达到单例模式的效果。
-通用的惰性单例
+### 通用的惰性单例
+```js
+var getSingle = function (fn) {
+  var result;
+  return function () {
+    return result || (result = fn.apply(this, arguments));
+  };
+};
 
+```
 使用：
+```js
 
+var createLoginLayer = function () {
+  var div = document.createElement("div");
+  div.innerHTML = "我是登录浮窗";
+  div.style.display = "none";
+  document.body.appendChild(div);
+  return div;
+};
+
+var createSingleLoginLayer = getSingle(createLoginLayer);
+document.getElementById("loginBtn").onclick = function () {
+  var loginLayer = createSingleLoginLayer();
+  loginLayer.style.display = "block";
+};
+
+//    下面我们再试试创建唯一的 iframe 用于动态加载第三方页面：
+var createSingleIframe = getSingle(function () {
+  var iframe = document.createElement("iframe");
+  document.body.appendChild(iframe);
+  return iframe;
+});
+
+document.getElementById("loginBtn").onclick = function () {
+  var loginLayer = createSingleIframe();
+  loginLayer.src = "http://baidu.com";
+};
+```
 ## 5.策略模式
 策略模式指的是定义一系列的算法，并且把它们封装起来。
 
@@ -627,19 +790,177 @@ alert ( cost() ); // 求值并输出：600
 策略模式提供了对开放—封闭原则的完美支持，将算法封装在独立的 strategy 中，使得它们易于切换，易于理解，易于扩展。 
 策略模式中的算法也可以复用在系统的其他地方，从而避免许多重复的复制粘贴工作。 
 在策略模式中利用组合和委托来让 Context 拥有执行算法的能力，这也是继承的一种更轻便的替代方案。
-文本输入框对应多种校验规则
+### 文本输入框对应多种校验规则
+```js
+<html>
 
+<body>
+    <form action="http:// xxx.com/register" id="registerForm" method="post">
+        请输入用户名：<input type="text" name="userName" />
+        请输入密码：<input type="text" name="password" />
+        请输入手机号码：<input type="text" name="phoneNumber" />
+        <button>提交</button>
+    </form>
+    <script>
+        /***********************策略对象**************************/
+        var strategies = {
+            isNonEmpty: function (value, errorMsg) {
+                if (value === '') {
+                    return errorMsg;
+                }
+            },
+            minLength: function (value, length, errorMsg) {
+                if (value.length < length) {
+                    return errorMsg;
+                }
+            },
+            isMobile: function (value, errorMsg) {
+                if (!/(^1[3|5|8][0-9]{9}$)/.test(value)) {
+                    return errorMsg;
+                }
+            }
+        };
+        /***********************Validator 类**************************/
+        var Validator = function () {
+            this.cache = [];
+        };
+        Validator.prototype.add = function (dom, rules) {
+            var self = this;
+            for (var i = 0, rule; rule = rules[i++];) {
+                (function (rule) {
+                    var strategyAry = rule.strategy.split(':');
+                    var errorMsg = rule.errorMsg;
+                    self.cache.push(function () {
+                        var strategy = strategyAry.shift();
+                        strategyAry.unshift(dom.value);
+                        strategyAry.push(errorMsg);
+                        return strategies[strategy].apply(dom, strategyAry);
+                    });
+                })(rule)
+            }
+        };
+        Validator.prototype.start = function () {
+            for (var i = 0, validatorFunc; validatorFunc = this.cache[i++];) {
+                var errorMsg = validatorFunc();
+                if (errorMsg) {
+                    return errorMsg;
+                }
+            }
+        };
+        /***********************客户调用代码**************************/
+        var registerForm = document.getElementById('registerForm');
+        var validataFunc = function () {
+            var validator = new Validator();
+            validator.add(registerForm.userName, [{
+                strategy: 'isNonEmpty',
+                errorMsg: '用户名不能为空'
+            }, {
+                strategy: 'minLength:6',
+                errorMsg: '用户名长度不能小于 10 位'
+            }]);
+            validator.add(registerForm.password, [{
+                strategy: 'minLength:6',
+                errorMsg: '密码长度不能小于 6 位'
+            }]);
+            validator.add(registerForm.phoneNumber, [{
+                strategy: 'isMobile',
+                errorMsg: '手机号码格式不正确'
+            }]);
+            var errorMsg = validator.start();
+            return errorMsg;
+        }
+        registerForm.onsubmit = function () {
+            var errorMsg = validataFunc();
+            if (errorMsg) {
+                alert(errorMsg);
+                return false;
+            }
+
+        };
+    </script>
+</body>
+
+</html>
+```
 ## 6.代理模式
-代理模式是为一个对象提供一个代用品或占位符，以便控制对它的访问。
+**代理模式是为一个对象提供一个代用品或占位符，以便控制对它的访问。**
 举个例子： 在四月一个晴朗的早晨，小明遇见了他的百分百女孩，我们暂且称呼小明的女神为 A。两天之后，小明决定给 A 送一束花来表白。刚好小明打听到 A 和他有一个共同的朋 友 B，于是内向的小明决定让 B 来代替自己完成送花这件事情。
 假设当 A 在心情好的时候收到花，小明表白成功的几率有 60%，而当 A 在心情差的时候收到花，小明表白的成功率无限趋近于 0。 
 小明跟 A 刚刚认识两天，还无法辨别 A 什么时候心情好。如果不合时宜地把花送给 A，花被直接扔掉的可能性很大，这束花可是小明吃了 7 天泡面换来的。
 但是 A 的朋友 B 却很了解 A，所以小明只管把花交给 B，B 会监听 A 的心情变化，然后选择 A 心情好的时候把花转交给 A，代码如下：
+```js
+var Flower = function () {};
 
-保护代理和虚拟代理
+var xiaoming = {
+  sendFlower: function (target) {
+    var flower = new Flower();
+    target.receiveFlower(flower);
+  },
+};
+
+var B = {
+  receiveFlower: function (flower) {
+    A.listenGoodMood(function () {
+      // 监听 A 的好心情
+      A.receiveFlower(flower);
+    });
+  },
+};
+
+var A = {
+  receiveFlower: function (flower) {
+    console.log("收到花 " + flower);
+  },
+  listenGoodMood: function (fn) {
+    setTimeout(function () {
+      // 假设 10 秒之后 A 的心情变好
+      fn();
+    }, 10000);
+  },
+};
+
+xiaoming.sendFlower(B);
+```
+### 保护代理和虚拟代理
 虽然这只是个虚拟的例子，但我们可以从中找到两种代理模式的身影。代理 B 可以帮助 A 过滤掉一些请求，比如送花的人中年龄太大的或者没有宝马的，这种请求就可以直接在代理 B 处被拒绝掉。这种代理叫作保护代理。A 和 B 一个充当白脸，一个充当黑脸。白脸 A 继续保持 良好的女神形象，不希望直接拒绝任何人，于是找了黑脸 B 来控制对 A 的访问。 
 另外，假设现实中的花价格不菲，导致在程序世界里，new Flower 也是一个代价昂贵的操作， 那么我们可以把 new Flower 的操作交给代理 B 去执行，代理 B 会选择在 A 心情好时再执行 new Flower，这是代理模式的另一种形式，叫作虚拟代理。虚拟代理把一些开销很大的对象，延迟到 真正需要它的时候才去创建。代码如下：
-
+```js
+var B = {
+  receiveFlower: function (flower) {
+    A.listenGoodMood(function () {
+      // 监听 A 的好心情
+      var flower = new Flower(); // 延迟创建 flower 对象
+      A.receiveFlower(flower);
+    });
+  },
+};
+```
  保护代理用于控制不同权限的对象对目标对象的访问，但在 JavaScript 并不容易实现保护代理，因为我们无法判断谁访问了某个对象。而虚拟代理是最常用的一种代理模式，本章主要讨论的也是虚拟代理。
 
-虚拟代理实现图片预加载
+### 虚拟代理实现图片预加载
+```js
+const myImage = ( () =>{
+  const imgNode = document.createElement("img");
+  document.body.appendChild(imgNode);
+  return {
+    setSrc:  (src)=> {
+      imgNode.src = src;
+    },
+  };
+})();
+
+const proxyImage = ( () =>{
+  const img = new Image();
+  img.onload =  () =>{
+    myImage.setSrc(this.src);
+  };
+  return {
+    setSrc:  (src)=> {
+      myImage.setSrc("file:// /C:/Users/svenzeng/Desktop/loading.gif");
+      img.src = src;
+    },
+  };
+})();
+
+proxyImage.setSrc("http:// imgcache.qq.com/music/photo/k/000GGDys0yA0Nk.jpg");
+```
