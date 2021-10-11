@@ -1175,3 +1175,4 @@ alert(proxyMult(1, 2, 3, 4));//输出：24
 alert(proxyPlus(1, 2, 3, 4));//输出：10 
 alert(proxyPlus(1, 2, 3, 4));//输出：10
 ```
+## 迭代器模式
