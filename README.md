@@ -964,3 +964,214 @@ const proxyImage = ( () =>{
 
 proxyImage.setSrc("http:// imgcache.qq.com/music/photo/k/000GGDys0yA0Nk.jpg");
 ```
+### 代理的意义
+ 在说明代理的意义之前，我们先引入一个面向对象涉及的原则----**单一职责原则**
+ **单一职责原则** ：一个类（对象和函数等），应该仅有一个引起它变化的原因。如果一个对象承担了多项职责，也就意味着这个对象将变得巨大，引起它变化的原因可能有多个。面向对象设计鼓励将行为分布到细粒度的对象之中，如果一个对象承担的职责过多，等于把这些职责耦合到了一起，这种耦合会导致脆弱和低内聚的设计。当变化发生时，设计可能会遭到意外的破坏。
+ 
+### 虚拟代理合并HTTP请求
+假设我们在做一个文件同步的功能，当我们选中一个 checkbox 的时候，它对应的文件就会被同步到另外一台备用服务器上面，我们先在页面中放置好checkbox节点，接下来，给这些 checkbox 绑定点击事件，并且在点击的同时往另一台服务器同步文件
+```js
+var synchronousFile = function (id) {
+  console.log('开始同步文件，id 为: ' + id);
+};
+var checkbox = document.getElementsByTagName('input');
+for (var i = 0, c; c = checkbox[i++];) {
+  c.onclick = function () {
+    if (this.checked === true) {
+      synchronousFile(this.id);
+    }
+  }
+};
+```
+我们可以通过一个代理函数 proxySynchronousFile 来收集一段时间之内的请求，最后一次性发送给服务器。比如我们等待 2 秒之后才把这 2 秒之内需要同步的文件 ID 打包发给服务器，如果不是对实时性要求非常高的系统，2 秒的延迟不会带来太大副作用，却能大大减轻服务器的压力。代码如下：
+```js
+var synchronousFile = function (id) {
+  console.log('开始同步文件，id 为: ' + id);
+};
+var proxySynchronousFile = (function () {
+  var cache = [], // 保存一段时间内需要同步的 ID 
+    timer; // 定时器
+  return function (id) {
+    cache.push(id);
+    if (timer) { // 保证不会覆盖已经启动的定时器
+      return;
+    }
+    timer = setTimeout(function () {
+      synchronousFile(cache.join(',')); // 2 秒后向本体发送需要同步的 ID 集合
+      clearTimeout(timer); // 清空定时器
+      timer = null;
+      cache.length = 0; // 清空 ID 集合
+    }, 2000);
+  }
+})();
+var checkbox = document.getElementsByTagName('input');
+for (var i = 0, c; c = checkbox[i++];) {
+  c.onclick = function () {
+    if (this.checked === true) {
+      proxySynchronousFile(this.id);
+    }
+  }
+};
+```
+
+### 虚拟代理在惰性加载中的应用
+	miniConsole.js可以帮助开发者在浏览器上进行一些简单调试工作，`miniConsole.log(1)`,这句话会在页面中创建一个 div，并且把 log 显示在 div 里面，miniConsole.js的代码量大概有1000行左右，也许我们并不想一开始就加载这么大的JS文件，因为也许并不是每个用户都需要打印 log。我们希望在有必要的时候才开始加载它，比如当用户按下 F2 来主动唤出控制台的时候。
+	在miniConsole.js加载之前，为了能够让用户正常地使用里面的API，通常我们的解决方案是用一个占位的miniConsole代理对象来给用户提前使用，这个代理对象提供给用户的接口，跟实际的miniConsole是一样的。
+	用户使用这个代理对象来打印log的时候，并不会真正在控制台内打印日志，更不会在页面中创建任何DOM节点。即使我们想这样做也无能为力，因为真正的miniConsole.js还没有被加载。
+	于是，我们可以把打印log的请求都包裹在一个函数里面，这个包装了请求的函数就相当于其他语言中命令模式中的`Command`对象。随后这些函数将全部被放到缓存队列中，这些逻辑都是在miniConsole代理对象中完成实现的。等用户按下F2唤出控制台的时候，才开始加载真正的miniConsole.js的代码，加载完成之后将遍历miniConsole代理对象中的缓存函数队列，同时依次执行它们。
+	当然，请求的到底是什么对用户来说是不透明的，用户并不清楚它请求的是代理对象，所以他可以在任何时候放心地使用miniConsole对象。
+	未加载真正的miniConsole.js之前的代码如下:
+```js
+let cache = []
+const miniConsole = {
+  log:function() {
+    const args = arguments;
+    cache.push(function () {
+      return miniConsole.log.apply(miniConsole,args)
+    })
+  }
+}
+
+miniConsole.log(1);
+```
+当用户按下 F2时，开始加载真正的miniConsole.js，代码如下：
+
+```js
+let handler = function (ev) {
+  if (ev.keyCode === 113) {
+    const script = document.createElement('script');
+    script.onload = function () {
+      for (let i = 0, fn; fn = cache[i++];) {
+        fn();
+      }
+    };
+    script.src = 'miniConsole.js';
+    document.getElementsByTagName('head')[0].appendChild(script);
+  }
+};
+
+document.body.addEventListener('keydown', handler, false);
+```
+miniConsole.js代码：
+```js
+miniConsole={
+log:function(){
+//真正代码略
+console.log(Array.prototype.join.call(arguments));}
+};
+```
+虽然我们没有给出miniConsole.js的真正代码，但这不影响我们理解其中的逻辑。当然这里还要注意一个问题，就是我们要保证在F2被重复按下的时候，miniConsole.js只被加载一次。另外我们整理一下miniConsole代理对象的代码，使它成为一个标准的虚拟代理对象，代码如下：
+
+```js
+const miniConsole = (function () {
+  var cache = [];
+  const handler = function (ev) {
+    if (ev.keyCode === 113) {
+      var script = document.createElement('script');
+      script.onload = function () {
+        for (var i = 0, fn; fn = cache[i++];) {
+          fn();
+        }
+      };
+      script.src = 'miniConsole.js';
+      document.getElementsByTagName('head')[0].appendChild(script);
+      document.body.removeEventListener('keydown', handler);//只加载一次miniConsole.js }
+    };
+    document.body.addEventListener('keydown', handler, false);
+    return {
+      log: function () {
+        var args = arguments;
+        cache.push(function () {
+          return miniConsole.log.apply(miniConsole, args);
+        });
+      }
+    }
+  }) ();
+
+  miniConsole.log(11);//开始打印log
+```
+
+### 缓存代理
+	缓存代理可以为一些开销大的运算结果提供暂时的存储，在下次运算时，如果传递进来的参数跟之前一致，则可以直接返回前面存储的运算结果。
+#### 缓存代理的例子---计算乘积
+ 先创建一个用于求乘积的函数：
+ ```js
+ const mult = function (...args:number[]) {
+  console.log('开始计算乘积')
+  let a = 1
+  for (let i = 0, l = args.length; i < l; i++) {
+    a *= args[i]
+  }
+  return a
+}
+mult(2, 3) //6
+
+ ```
+现在加入缓存代理函数：
+```js
+const proxyMult = (function () {
+  let cache = {};
+  return function () {
+    const args = Array.prototype.join.call(arguments, ','); 
+    if (args in cache) {
+      return cache[args];
+    }
+    return cache[args] = mult.apply(this, arguments);
+  }
+})();
+```
+
+#### 缓存代理用于Ajax异步请求数据
+
+	我们在常常在项目中遇到分页的需求，同一页的数据理论上只需要去后台拉取一次，这些已经拉取到的数据在某个地方被缓存之后，下次再请求同一页的时候，便可以直接使用之前的数据。
+	显然这里也可以引入缓存代理，实现方式跟计算乘积的例子差不多，唯一不同的是，请求数据是个异步的操作，我们无法直接把计算结果放到代理对象的缓存中，而是要通过回调的方式。具体代码不再赘述，读者可以自行实现。
+
+
+### 用高阶函数动态创建代理
+	通过传入高阶函数这种更加灵活的方式，可以为各种计算方法创建缓存代理。现在这些计算方法被当作参数传入一个专门用于创建缓存代理的工厂中，这样一来，我们就可以为乘法、加法、减法等创建缓存代理，代码如下：
+
+```js
+/****************计算乘积*****************/
+var mult = function () {
+  var a = 1;
+  for (var i = 0, l = arguments.length; i < l; i++) {
+    a = a * arguments[i];
+  }
+  return a;
+};
+```
+```js
+
+/****************计算加和*****************/
+var plus = function () {
+  var a = 0;
+  for (var i = 0, l = arguments.length; i < l; i++) {
+    a = a + arguments[i];
+  }
+  return a;
+};
+```
+
+```js
+/****************创建缓存代理的工厂*****************/
+var createProxyFactory = function (fn) {
+  var cache = {};
+  return function(){
+    var args = Array.prototype.join.call(arguments, ','); if (args in cache) {
+      return cache[args];
+    }
+    return cache[args] = fn.apply(this, arguments);
+  }
+};
+```
+
+
+```js
+var proxyMult=createProxyFactory(mult),proxyPlus=createProxyFactory(plus);
+```
+```
+alert(proxyMult(1, 2, 3, 4));//输出：24 
+alert(proxyMult(1, 2, 3, 4));//输出：24 
+alert(proxyPlus(1, 2, 3, 4));//输出：10 
+alert(proxyPlus(1, 2, 3, 4));//输出：10
+```
